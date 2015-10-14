@@ -20,22 +20,22 @@ func newParserScannerErrorSink(parser Parser, es *errorSink) *ParserScanner {
 
 // Scan the parser for a sub parser.
 // Returns true if a sub parser was found.
-func (p *ParserScanner) Scan() bool {
+func (scanner *ParserScanner) Scan() bool {
 	var err error
-	if p.es.ok() {
-		p.result, err = p.parser.Next()
-		p.es.send(err)
+	if scanner.es.ok() {
+		scanner.result, err = scanner.parser.Next()
+		scanner.es.send(err)
 	}
-	if err != nil || p.result == nil {
+	if err != nil || scanner.result == nil {
 		return false
 	}
 	return true
 }
 
 // Returns the result of the previous scan.
-func (p *ParserScanner) Result() Parser {
-	if p.es.ok() {
-		return p.result
+func (scanner *ParserScanner) Result() Parser {
+	if scanner.es.ok() {
+		return scanner.result
 	}
 	return nil
 }
@@ -43,6 +43,6 @@ func (p *ParserScanner) Result() Parser {
 // Returns the first error that occured while scanning.
 // This should be called after Scan() has returned false to check
 // for errors.
-func (p *ParserScanner) Error() error {
-	return p.es.error()
+func (scanner *ParserScanner) Error() error {
+	return scanner.es.error()
 }

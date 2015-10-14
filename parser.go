@@ -27,13 +27,13 @@ func NewParser(text []byte) Parser {
 
 // Get the next parser or nil on end of input or an error.
 // The returned parser may be a Dict, List or String.
-func (p *Root) Next() (Parser, error) {
-	return scanValue(p.buf)
+func (root *Root) Next() (Parser, error) {
+	return scanValue(root.buf)
 }
 
 // Get the text the parser was initialized with.
-func (p *Root) Text() []byte {
-	return p.org
+func (root *Root) Text() []byte {
+	return root.org
 }
 
 //-----------------------------------------------------------------------------
@@ -62,29 +62,29 @@ func newDictParser(buf *parserBuf) *Dict {
 // Get the next parser or nil on end of input or an error.
 // Every even call returns a key which is of type DictKey.
 // Every odd call returns a value which may be a Dict, List or String.
-func (p *Dict) Next() (parser Parser, err error) {
-	if p.count%2 == 0 {
-		parser, err = scanKey(p.buf)
+func (dict *Dict) Next() (parser Parser, err error) {
+	if dict.count%2 == 0 {
+		parser, err = scanKey(dict.buf)
 	} else {
-		parser, err = scanValue(p.buf)
+		parser, err = scanValue(dict.buf)
 		if parser == nil && err == nil {
-			err = p.buf.errorf("key without value in dictionary")
+			err = dict.buf.errorf("key without value in dictionary")
 		}
 	}
 	if parser != nil {
-		p.count++
+		dict.count++
 	}
 	return
 }
 
 // Check if the parser has consumed all data.
-func (p *Dict) IsEmpty() bool {
-	return p.buf.len() == 0
+func (dict *Dict) IsEmpty() bool {
+	return dict.buf.len() == 0
 }
 
 // Get the text the parser was initialized with.
-func (p *Dict) Text() []byte {
-	return p.org
+func (dict *Dict) Text() []byte {
+	return dict.org
 }
 
 //-----------------------------------------------------------------------------
@@ -95,18 +95,18 @@ func (p *Dict) Text() []byte {
 type DictKey String
 
 // Returns nil as keys does not contain sub parsers.
-func (v DictKey) Next() (Parser, error) {
+func (key DictKey) Next() (Parser, error) {
 	return nil, nil
 }
 
 // Get the text the parser was initialized with.
-func (v DictKey) Text() []byte {
-	return v
+func (key DictKey) Text() []byte {
+	return key
 }
 
 // Format as a POT dictionary key.
-func (v DictKey) String() string {
-	return string(v) + ":"
+func (key DictKey) String() string {
+	return string(key) + ":"
 }
 
 //-----------------------------------------------------------------------------
@@ -132,16 +132,16 @@ func newListParser(buf *parserBuf) *List {
 
 // Get the next parser or nil on end of input or an error.
 // The returned parser may be a Dict, List or String.
-func (p *List) Next() (parser Parser, err error) {
-	if parser, err = scanValue(p.buf); parser != nil {
-		p.count++
+func (list *List) Next() (parser Parser, err error) {
+	if parser, err = scanValue(list.buf); parser != nil {
+		list.count++
 	}
 	return
 }
 
 // Get the text the parser was initialized with.
-func (p *List) Text() []byte {
-	return p.org
+func (list *List) Text() []byte {
+	return list.org
 }
 
 //-----------------------------------------------------------------------------
@@ -150,7 +150,7 @@ func (p *List) Text() []byte {
 type String []byte
 
 // Returns nil as strings does not contain sub parsers.
-func (v String) Next() (Parser, error) {
+func (str String) Next() (Parser, error) {
 	return nil, nil
 }
 
@@ -163,19 +163,19 @@ var charToEscapeCode = map[byte]byte{
 }
 
 // Format as a POT string value.
-func (v String) String() string {
+func (str String) String() string {
 	quote := false
 	newBuf := false
 
-	t := v
-	for i, c := range v {
+	t := str
+	for i, c := range str {
 		switch c {
 		case '{', '}', '[', ']', ':', ' ':
 			quote = true
 		case '\n', '\r', '\t', '\\', '"':
 			if !newBuf {
-				t = make([]byte, 0, len(v))
-				t = append(t, v[:i]...)
+				t = make([]byte, 0, len(str))
+				t = append(t, str[:i]...)
 				newBuf = true
 			}
 			t = append(t, '\\', charToEscapeCode[c])
@@ -192,8 +192,8 @@ func (v String) String() string {
 }
 
 // Get the text the parser was initialized with.
-func (v String) Text() []byte {
-	return v
+func (str String) Text() []byte {
+	return str
 }
 
 //-----------------------------------------------------------------------------
