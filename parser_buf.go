@@ -33,8 +33,8 @@ func (buf *parserBuf) bytes() []byte {
 // UTF8 start character mask.
 const utf8Start = 0x080
 
-// Column number at end of consumed data.
-func (buf *parserBuf) columnNumber() int {
+// Get column and line number at end of consumed data (counting from zero).
+func (buf *parserBuf) location() Location {
 	column := 0
 	for i := len(buf.tail) - 1; i >= 0; i-- {
 		c := rune(buf.tail[i])
@@ -45,7 +45,8 @@ func (buf *parserBuf) columnNumber() int {
 			column++
 		}
 	}
-	return column
+	line := bytes.Count(buf.tail, []byte("\n"))
+	return Location{Line: line, Column: column}
 }
 
 // Number of unconsumed bytes.
@@ -53,15 +54,12 @@ func (buf *parserBuf) len() int {
 	return len(buf.head)
 }
 
-// Line number at end of consumed data.
-func (buf *parserBuf) lineNumber() int {
-	return bytes.Count(buf.tail, []byte("\n")) + 1
-}
-
 // Format an error with location information.
 func (buf *parserBuf) errorf(format string, a ...interface{}) error {
-	loc := fmt.Sprintf("%d:%d: ", buf.lineNumber(), buf.columnNumber())
-	return fmt.Errorf(loc+format, a...)
+	return &ParseError{
+		Location: buf.location(),
+		Message:  fmt.Sprintf(format, a...),
+	}
 }
 
 // Split buffer creating a new buffer (consume).
