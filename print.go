@@ -18,36 +18,36 @@ func indentSpace(indentLevel int) []byte {
 
 // Pretty print POT text buffer.
 // Returns a byte slice or an error on parsing errors.
-func PrettyPrint(text []byte) ([]byte, error) {
+func PrettyPrint(pot []byte) ([]byte, error) {
 	buf := newPrintBuf(nil)
-	ps := newParserScannerErrorSink(NewParser(text), buf.errorSink())
-	for ps.Scan() {
-		switch subparser := ps.Result().(type) {
+	scanner := newParserScannerErrorSink(NewParser(pot), buf.errorSink())
+	for scanner.Scan() {
+		switch subparser := scanner.SubParser().(type) {
 		case *Dict:
 			prettyPrintDict(buf, subparser, 0)
 		case *List:
 			printList(buf, subparser)
-		case String:
+		case *String:
 			buf.printf("%s", subparser)
 		}
 		buf.term('\n')
 	}
 
 	buf.flush()
-	return buf.bytes(), buf.error()
+	return buf.bytes(), buf.err()
 }
 
 // Pretty print dictionary.
 // Any errors are sent to the print buffer's error sink.
 func prettyPrintDict(buf *printBuf, dict *Dict, indentLevel int) {
-	var key DictKey
+	var key *DictKey
 	spaces0 := indentSpace(indentLevel)
 	spaces1 := indentSpace(indentLevel + 1)
 
 	buf.write([]byte("{\n"))
-	ps := newParserScannerErrorSink(dict, buf.errorSink())
-	for ps.Scan() {
-		switch subparser := ps.Result().(type) {
+	scanner := newParserScannerErrorSink(dict, buf.errorSink())
+	for scanner.Scan() {
+		switch subparser := scanner.SubParser().(type) {
 		case *Dict:
 			if subparser.IsEmpty() {
 				buf.printf("%s%s\t{ }\n", spaces1, key)
@@ -55,13 +55,13 @@ func prettyPrintDict(buf *printBuf, dict *Dict, indentLevel int) {
 				buf.printf("%s%s ", spaces1, key)
 				prettyPrintDict(buf, subparser, indentLevel+1)
 			}
-		case DictKey:
+		case *DictKey:
 			key = subparser
 		case *List:
 			buf.printf("%s%s\t", spaces1, key)
 			printList(buf, subparser)
 			buf.term('\n')
-		case String:
+		case *String:
 			buf.printf("%s%s\t%s\n", spaces1, key, subparser)
 		}
 	}
@@ -72,21 +72,21 @@ func prettyPrintDict(buf *printBuf, dict *Dict, indentLevel int) {
 // Print dictionary on a single line.
 // Any errors are sent to the print buffer's error sink.
 func printDict(buf *printBuf, dict *Dict) {
-	var key DictKey
+	var key *DictKey
 
 	buf.write([]byte("{ "))
-	ps := newParserScannerErrorSink(dict, buf.errorSink())
-	for ps.Scan() {
-		switch subparser := ps.Result().(type) {
+	scanner := newParserScannerErrorSink(dict, buf.errorSink())
+	for scanner.Scan() {
+		switch subparser := scanner.SubParser().(type) {
 		case *Dict:
 			buf.printf("%s ", key)
 			printDict(buf, subparser)
-		case DictKey:
+		case *DictKey:
 			key = subparser
 		case *List:
 			buf.printf("%s ", key)
 			printList(buf, subparser)
-		case String:
+		case *String:
 			buf.printf("%s %s ", key, subparser)
 		}
 	}
@@ -97,14 +97,14 @@ func printDict(buf *printBuf, dict *Dict) {
 // Any errors are sent to the print buffer's error sink.
 func printList(buf *printBuf, list *List) {
 	buf.write([]byte("[ "))
-	ps := newParserScannerErrorSink(list, buf.errorSink())
-	for ps.Scan() {
-		switch subparser := ps.Result().(type) {
+	scanner := newParserScannerErrorSink(list, buf.errorSink())
+	for scanner.Scan() {
+		switch subparser := scanner.SubParser().(type) {
 		case *Dict:
 			printDict(buf, subparser)
 		case *List:
 			printList(buf, subparser)
-		case String:
+		case *String:
 			buf.printf("%s ", subparser)
 		}
 	}

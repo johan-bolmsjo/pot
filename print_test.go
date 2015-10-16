@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func testPrettyPrint(text string) {
-	buf, err := PrettyPrint([]byte(text))
+func testPrettyPrint(pot string) {
+	buf, err := PrettyPrint([]byte(pot))
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
 	} else {
@@ -23,7 +23,7 @@ words as root parser strings [ and a list ]
 {}
 `
 
-func ExamplePrint1() {
+func ExamplePrettyPrint() {
 	testPrettyPrint(examplePrint1)
 	// Output:
 	// words
@@ -50,12 +50,12 @@ func ExamplePrint1() {
 }
 
 // Exercise some functions not possible to run through examples.
-func TestPrintCoverage(t *testing.T) {
+func Test_PrintCoverage(t *testing.T) {
 	es := new(errorSink)
 	buf := newPrintBuf(es)
 	buf.write([]byte("test"))
 	buf.flush()
-	es.err = fmt.Errorf("test")
+	es.e = fmt.Errorf("test")
 	if bytes := buf.bytes(); bytes != nil {
 		t.Errorf("printBuf.bytes() = %v want nil", bytes)
 	}

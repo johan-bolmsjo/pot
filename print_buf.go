@@ -39,8 +39,8 @@ func (pbuf *printBuf) bytes() []byte {
 }
 
 // Returns the error stored in the error sink.
-func (pbuf *printBuf) error() error {
-	return pbuf.es.error()
+func (pbuf *printBuf) err() error {
+	return pbuf.es.err()
 }
 
 // Returns the error sink used by the buffer.

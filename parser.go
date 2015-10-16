@@ -7,8 +7,12 @@ type Parser interface {
 	// Get the next parser, nil or an error.
 	Next() (Parser, error)
 
-	// Get the text the parser was initialized with.
-	Text() []byte
+	// Get text the parser was initialized with.
+	Bytes() []byte
+
+	// Get parser start location in the original text input.
+	// The location is reset when using NewParser, NewDictParser or NewListParser.
+	Location() Location
 }
 
 //-----------------------------------------------------------------------------
@@ -16,13 +20,14 @@ type Parser interface {
 // Root level parser capable of parsing multiple root level objects from the
 // same text input.
 type Root struct {
-	org []byte     // Text the parser was initialized with.
+	org parserBuf  // Text the parser was initialized with.
 	buf *parserBuf // Text buffer the parser operates on.
 }
 
 // Create a new root level parser parsing the supplied text.
-func NewParser(text []byte) Parser {
-	return &Root{text, newParserBuf(text)}
+func NewParser(pot []byte) Parser {
+	buf := newParserBuf(pot)
+	return &Root{*buf, buf}
 }
 
 // Get the next parser or nil on end of input or an error.
@@ -31,32 +36,37 @@ func (root *Root) Next() (Parser, error) {
 	return scanValue(root.buf)
 }
 
-// Get the text the parser was initialized with.
-func (root *Root) Text() []byte {
-	return root.org
+// Get text the parser was initialized with.
+func (root *Root) Bytes() []byte {
+	return root.org.bytes
+}
+
+// Get parser start location in the original text input.
+func (root *Root) Location() Location {
+	return root.org.location
 }
 
 //-----------------------------------------------------------------------------
 
 // Dictionary parser.
 type Dict struct {
-	org   []byte     // Text the parser was initialized with.
+	org   parserBuf  // Text the parser was initialized with.
 	buf   *parserBuf // Text buffer the parser operates on.
 	count int        // Number of returned parsers.
 }
 
 // Create a new dictionary parser parsing the supplied text.
-func NewDictParser(text []byte) *Dict {
-	return newDictParser(newParserBuf(text))
+func NewDictParser(pot []byte) *Dict {
+	return newDictParser(newParserBuf(pot))
 }
 
 // Create a new dictionary parser parsing the supplied parser buffer.
 func newDictParser(buf *parserBuf) *Dict {
-	org := buf.head
+	dict := &Dict{*buf, buf, 0}
 	buf.stripBlock('{', '}')
 	// Trim space to make IsEmpty() work out of the gate.
 	buf.trimSpaceLeft()
-	return &Dict{org, buf, 0}
+	return dict
 }
 
 // Get the next parser or nil on end of input or an error.
@@ -79,12 +89,17 @@ func (dict *Dict) Next() (parser Parser, err error) {
 
 // Check if the parser has consumed all data.
 func (dict *Dict) IsEmpty() bool {
-	return dict.buf.len() == 0
+	return len(dict.buf.bytes) == 0
 }
 
-// Get the text the parser was initialized with.
-func (dict *Dict) Text() []byte {
-	return dict.org
+// Get text the parser was initialized with.
+func (dict *Dict) Bytes() []byte {
+	return dict.org.bytes
+}
+
+// Get parser start location in the original text input.
+func (dict *Dict) Location() Location {
+	return dict.org.location
 }
 
 //-----------------------------------------------------------------------------
@@ -95,62 +110,68 @@ func (dict *Dict) Text() []byte {
 type DictKey String
 
 // Returns nil as keys does not contain sub parsers.
-func (key DictKey) Next() (Parser, error) {
+func (key *DictKey) Next() (Parser, error) {
 	return nil, nil
 }
 
-// Get the text the parser was initialized with.
-func (key DictKey) Text() []byte {
-	return key
+// Get text the parser was initialized with.
+func (key *DictKey) Bytes() []byte {
+	return (*String)(key).Bytes()
 }
 
 // Format as a POT dictionary key.
-func (key DictKey) String() string {
-	return string(key) + ":"
+func (key *DictKey) String() string {
+	return string(key.Bytes()) + ":"
+}
+
+// Get parser start location in the original text input.
+func (key *DictKey) Location() Location {
+	return (*String)(key).Location()
 }
 
 //-----------------------------------------------------------------------------
 
 // List parser.
 type List struct {
-	org   []byte     // Text the parser was initialized with.
-	buf   *parserBuf // Text buffer the parser operates on.
-	count int        // Number of returned parsers.
+	org parserBuf  // Text the parser was initialized with.
+	buf *parserBuf // Text buffer the parser operates on.
 }
 
 // Create a new list parser parsing the supplied text.
-func NewListParser(text []byte) *List {
-	return newListParser(newParserBuf(text))
+func NewListParser(pot []byte) *List {
+	return newListParser(newParserBuf(pot))
 }
 
 // Create a new list parser parsing the supplied parser buffer.
 func newListParser(buf *parserBuf) *List {
-	org := buf.head
+	list := &List{*buf, buf}
 	buf.stripBlock('[', ']')
-	return &List{org, buf, 0}
+	return list
 }
 
 // Get the next parser or nil on end of input or an error.
 // The returned parser may be a Dict, List or String.
-func (list *List) Next() (parser Parser, err error) {
-	if parser, err = scanValue(list.buf); parser != nil {
-		list.count++
-	}
-	return
+func (list *List) Next() (Parser, error) {
+	return scanValue(list.buf)
 }
 
-// Get the text the parser was initialized with.
-func (list *List) Text() []byte {
-	return list.org
+// Get text the parser was initialized with.
+func (list *List) Bytes() []byte {
+	return list.org.bytes
+}
+
+// Get parser start location in the original text input.
+func (list *List) Location() Location {
+	return list.org.location
 }
 
 //-----------------------------------------------------------------------------
 
 // String parser.
-type String []byte
+type String parserBuf
 
 // Returns nil as strings does not contain sub parsers.
-func (str String) Next() (Parser, error) {
+func (str *String) Next() (Parser, error) {
 	return nil, nil
 }
 
@@ -163,19 +184,19 @@ var charToEscapeCode = map[byte]byte{
 }
 
 // Format as a POT string value.
-func (str String) String() string {
+func (str *String) String() string {
 	quote := false
 	newBuf := false
 
-	t := str
-	for i, c := range str {
+	t := str.bytes
+	for i, c := range str.bytes {
 		switch c {
 		case '{', '}', '[', ']', ':', ' ':
 			quote = true
 		case '\n', '\r', '\t', '\\', '"':
 			if !newBuf {
-				t = make([]byte, 0, len(str))
-				t = append(t, str[:i]...)
+				t = make([]byte, 0, len(str.bytes))
+				t = append(t, str.bytes[:i]...)
 				newBuf = true
 			}
 			t = append(t, '\\', charToEscapeCode[c])
@@ -191,9 +212,14 @@ func (str String) String() string {
 	return string(t)
 }
 
-// Get the text the parser was initialized with.
-func (str String) Text() []byte {
-	return str
+// Get text the parser was initialized with.
+func (str *String) Bytes() []byte {
+	return str.bytes
+}
+
+// Get parser start location in the original text input.
+func (str *String) Location() Location {
+	return str.location
 }
 
 //-----------------------------------------------------------------------------
@@ -202,16 +228,16 @@ func (str String) Text() []byte {
 // Returns a parser or nil when there is no more input or an error.
 func scanKey(buf *parserBuf) (Parser, error) {
 	buf.trimSpaceLeft()
-	if buf.len() == 0 {
+	if len(buf.bytes) == 0 {
 		return nil, nil
 	}
-	for i, c := range buf.bytes() {
+	for i, c := range buf.bytes {
 		switch {
 		case validKeyChar(i, c):
 		case c == ':' && i > 0:
 			t := buf.split(i)
-			buf.trimBytesLeft(1) // ':'
-			return DictKey(t.bytes()), nil
+			buf.trimBytesLeft(1) // Eat ':'
+			return (*DictKey)(t), nil
 		default:
 			buf.trimBytesLeft(i)
 			return nil, buf.errorf("invalid character '%c' in key", c)
@@ -225,8 +251,8 @@ func scanKey(buf *parserBuf) (Parser, error) {
 // Returns a parser or nil when there is no more input or an error.
 func scanValue(buf *parserBuf) (parser Parser, err error) {
 	buf.trimSpaceLeft()
-	if buf.len() > 0 {
-		switch buf.at(0) {
+	if len(buf.bytes) > 0 {
+		switch buf.bytes[0] {
 		case '{':
 			if buf, err = scanBlock(buf, '{', '}'); err == nil {
 				parser = newDictParser(buf)
@@ -248,7 +274,7 @@ func scanBlock(buf *parserBuf, begChar, endChar byte) (*parserBuf, error) {
 	quoted := false
 	escaped := false
 	scope := 0
-	for i, c := range buf.bytes() {
+	for i, c := range buf.bytes {
 		switch c {
 		case '\\':
 			escaped = !escaped
@@ -288,7 +314,7 @@ func scanString(buf *parserBuf) (Parser, error) {
 	var i int
 	var c byte
 loop:
-	for i, c = range buf.bytes() {
+	for i, c = range buf.bytes {
 		switch c {
 		case '\\':
 			escaped = !escaped
@@ -323,7 +349,7 @@ loop:
 	if eval {
 		return evalStringBuffer(str)
 	}
-	return String(str.bytes()), nil
+	return (*String)(str), nil
 }
 
 var escapeCodeToChar = map[byte]byte{
@@ -332,14 +358,14 @@ var escapeCodeToChar = map[byte]byte{
 	't': '\t',
 }
 
-// Evaluate escape codes and quotes in string buffer.
-// Returns a String parser or an error.
+// Evaluate escape codes and quotes in string.
+// Returns the modified parser buffer as a string parser or an error.
 func evalStringBuffer(buf *parserBuf) (Parser, error) {
 	quoted := false
 	escaped := false
 
-	tr := make([]byte, 0, buf.len())
-	for i, c := range buf.bytes() {
+	tr := make([]byte, 0, len(buf.bytes))
+	for i, c := range buf.bytes {
 		switch c {
 		case '\\':
 			if escaped {
@@ -382,7 +408,8 @@ func evalStringBuffer(buf *parserBuf) (Parser, error) {
 		return nil, buf.errorf("unterminated escape code in string")
 	}
 
-	return String(tr), nil
+	buf.bytes = tr
+	return (*String)(buf), nil
 }
 
 // Check if 'c' is a valid key character at index 'i'.

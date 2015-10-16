@@ -7,151 +7,204 @@ import (
 	"testing"
 )
 
-func testParseString(text string) {
+func testParseString(pot string) {
+	testParse(NewParser([]byte(pot)))
+}
+
+func testParse(parser Parser) {
 	var buf bytes.Buffer
-	if err := testParse(&buf, NewParser([]byte(text))); err != nil {
+	if err := testParseDescent(&buf, parser); err != nil {
 		fmt.Printf("error: %s\n", err)
 	} else {
 		fmt.Printf("%s\n", buf.Bytes())
 	}
 }
 
-func testParse(wr io.Writer, parser Parser) error {
-	ps := NewParserScanner(parser)
-	for ps.Scan() {
-		switch subparser := ps.Result().(type) {
+func testParseDescent(wr io.Writer, parser Parser) error {
+	scanner := NewParserScanner(parser)
+	for scanner.Scan() {
+		switch parser := scanner.SubParser().(type) {
 		case *Dict:
 			fmt.Fprintf(wr, "{ ")
-			if err := testParse(wr, subparser); err != nil {
+			if err := testParseDescent(wr, parser); err != nil {
 				return err
 			}
 			fmt.Fprintf(wr, "} ")
-		case DictKey:
-			fmt.Fprintf(wr, "%s ", subparser)
+		case *DictKey:
+			fmt.Fprintf(wr, "%s ", parser)
 		case *List:
 			fmt.Fprintf(wr, "[ ")
-			if err := testParse(wr, subparser); err != nil {
+			if err := testParseDescent(wr, parser); err != nil {
 				return err
 			}
 			fmt.Fprintf(wr, "] ")
-		case String:
-			fmt.Fprintf(wr, "%s ", subparser)
+		case *String:
+			fmt.Fprintf(wr, "%s ", parser)
 		}
 	}
-	return ps.Error()
+	return scanner.Err()
 }
 
-func ExampleParserDict1() {
-	testParseString("{ fruit: orange price: 10.5 }")
+func Example_ParserDict1() {
+	testParse(NewDictParser([]byte("{ fruit: orange price: 10.5 }")))
 	// Output:
-	// { fruit: orange price: 10.5 }
+	// fruit: orange price: 10.5
 }
 
-func ExampleParserDict2() {
+func Example_ParserDict2() {
 	testParseString("{fruit:orange price:10.5}")
 	// Output:
 	// { fruit: orange price: 10.5 }
 }
 
-var exampleParserDict3 = `
+var example_ParserDict3 = `
         { animal:       zebra
           class:        mammal
           weight-range: [ 240kg 370kg ]
           foods:        [ "dry grass" apples ] }
 `
 
-func ExampleParserDict3() {
-	testParseString(exampleParserDict3)
+func Example_ParserDict3() {
+	testParseString(example_ParserDict3 + "\r")
 	// Output:
 	// { animal: zebra class: mammal weight-range: [ 240kg 370kg ] foods: [ "dry grass" apples ] }
 }
 
-func ExampleParserDict4() {
+func Example_ParserDict4() {
 	testParseString("{ a: { aa: [] ab: {} } b: \"\"}")
 	// Output:
 	// { a: { aa: [ ] ab: { } } b: "" }
 }
 
-func ExampleParserDict5() {
+func Example_ParserDict5() {
 	testParseString("{ -invalid-key: 0 }")
 	// Output:
 	// error: 1:2: invalid character '-' in key
 }
 
-func ExampleParserDict6() {
+func Example_ParserDict6() {
 	testParseString("{ : foo }")
 	// Output:
 	// error: 1:2: invalid character ':' in key
 }
 
-func ExampleParserDict7() {
+func Example_ParserDict7() {
 	testParseString("{ foo: }")
 	// Output:
 	// error: 1:7: key without value in dictionary
 }
 
-func ExampleParserDict8() {
+func Example_ParserDict8() {
 	testParseString("{ unterminated-key}")
 	// Output:
 	// error: 1:18: end of input while parsing key
 }
 
-func ExampleParserList1() {
-	testParseString("[ unterminated\\ block")
+func Example_ParserList1() {
+	testParse(NewListParser([]byte("[ unterminated\\ block")))
 	// Output:
 	// error: 1:21: end of input while parsing '[]' block
 }
 
-func ExampleParserString1() {
+func Example_ParserString1() {
 	testParseString("\"this is a long string\"")
 	// Output:
 	// "this is a long string"
 }
 
-func ExampleParserString2() {
+func Example_ParserString2() {
 	testParseString("this\\ is\\ a\\ long\\ string")
 	// Output:
 	// "this is a long string"
 }
 
-func ExampleParserString3() {
+func Example_ParserString3() {
 	testParseString("\"unterminated\\ quote")
 	// Output:
 	// error: 1:20: miss-matched quotes in string
 }
 
-func ExampleParserString4() {
+func Example_ParserString4() {
 	testParseString("\"escape codes: \"\\{\\}\\[\\]\\:\\ \\\\\\\"\\n\\r\\tthe-end")
 	// Output:
 	// "escape codes: {}[]: \\\"\n\r\tthe-end"
 }
 
-func ExampleParserString5() {
+func Example_ParserString5() {
 	testParseString("invalid-escape-code-\\m")
 	// Output:
 	// error: 1:21: invalid escape code \m
 }
 
-func ExampleParserString6() {
+func Example_ParserString6() {
 	testParseString("unterminated-escape-code-\\")
 	// Output:
 	// error: 1:26: unterminated escape code in string
 }
 
-func ExampleParserString7() {
+func Example_ParserString7() {
 	testParseString("]")
 	// Output:
 	// error: 1:0: invalid character ']' in string
 }
 
-func ExampleParserString8() {
+func Example_ParserString8() {
 	testParseString("\nunescaped-or-unquoted-colon-in-string:")
 	// Output:
 	// error: 2:37: invalid character ':' in string
 }
 
+// Test that stripping space from the right does not strip data that has already been consumed.
+func TestParserBuf_TrimSpaceRight(t *testing.T) {
+	buf := newParserBuf([]byte("    "))
+	buf.trimBytesLeft(2)
+	buf.trimSpaceRight()
+	if buf.location.Column != 2 || len(buf.bytes) != 0 {
+		t.Errorf("column = %d, len = %d", buf.location.Column, len(buf.bytes))
+	}
+}
+
+func testCheckBytesAndLocation(t *testing.T, prefix string, parser Parser, pot string, location Location) {
+	parserBytes := parser.Bytes()
+	if !bytes.Equal(parserBytes, []byte(pot)) {
+		t.Errorf("%s.Bytes() is '%s', expected '%s'", prefix, parserBytes, pot)
+	}
+	parserLocation := parser.Location()
+	if parserLocation != location {
+		t.Errorf("%s.Location() is '%s', expected '%s'", prefix, &parserLocation, location)
+	}
+}
+
+func testParserBytesAndLocationFunctions(t *testing.T, scanner *ParserScanner) {
+	for scanner.Scan() {
+		switch parser := scanner.SubParser().(type) {
+		case *Dict:
+			testCheckBytesAndLocation(t, "Dict.Bytes()", parser, "{ key: value }", Location{0, 3})
+			testParserBytesAndLocationFunctions(t, NewParserScanner(parser))
+		case *DictKey:
+			testCheckBytesAndLocation(t, "DictKey", parser, "key", Location{0, 5})
+		case *List:
+			testCheckBytesAndLocation(t, "List", parser, "[ { key: value } ]", Location{0, 1})
+			testParserBytesAndLocationFunctions(t, NewParserScanner(parser))
+		case *String:
+			testCheckBytesAndLocation(t, "String", parser, "value", Location{0, 10})
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Error(err)
+	}
+}
+
+// Test Bytes functions on parser interfaces.
+func Test_ParserBytesAndLocationFunctions(t *testing.T) {
+	parserStr := " [ { key: value } ]"
+	parser := NewParser([]byte(parserStr))
+	testCheckBytesAndLocation(t, "Root", parser, parserStr, Location{0, 0})
+	testParserBytesAndLocationFunctions(t, NewParserScanner(parser))
+}
+
 // Exercise some functions not possible to run through examples.
-func TestParserCoverage(t *testing.T) {
+func Test_ParserCoverage(t *testing.T) {
 	var s String
 	parser, err := s.Next()
 	if parser != nil || err != nil {
@@ -165,40 +218,13 @@ func TestParserCoverage(t *testing.T) {
 	}
 
 	parser = NewParser([]byte("something-fail:"))
-	ps := NewParserScanner(parser)
-	for ps.Scan() {
+	scanner := NewParserScanner(parser)
+	for scanner.Scan() {
 	}
-	if err = ps.Error(); err == nil {
+	if err = scanner.Err(); err == nil {
 		t.Errorf("ParserScanner.Error() = %v want !nil", err)
 	}
-	if parser = ps.Result(); parser != nil {
-		t.Errorf("ParserScanner.Result() = %v want nil", parser)
+	if parser = scanner.SubParser(); parser != nil {
+		t.Errorf("ParserScanner.SubParser() = %v want nil", parser)
 	}
-
-	dictTextInput := "{}"
-	dict := NewDictParser([]byte(dictTextInput))
-	dictTextOutput := string(dict.Text())
-	if dictTextInput != dictTextOutput {
-		t.Errorf("Dict.Text() = %v want %v", dictTextOutput, dictTextInput)
-	}
-
-	listTextInput := "[]"
-	list := NewListParser([]byte(listTextInput))
-	listTextOutput := string(list.Text())
-	if listTextInput != listTextOutput {
-		t.Errorf("List.Text() = %v want %v", listTextOutput, listTextInput)
-	}
-
-	rootTextInput := "{ hello: world }"
-	root := NewParser([]byte(rootTextInput))
-	rootTextOutput := string(root.Text())
-	if rootTextInput != rootTextOutput {
-		t.Errorf("Root.Text() = %v want %v", rootTextOutput, rootTextInput)
-	}
-
-	dictKey := DictKey([]byte("hello"))
-	dictKey.Text()
-
-	potString := String([]byte("world"))
-	potString.Text()
 }

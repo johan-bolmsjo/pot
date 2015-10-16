@@ -63,16 +63,16 @@ Create a new root level parser and call parser.Next() until it returns nil or an
 error. There is also ParserScanner type that wraps a parser interface to provide
 a bufio.Scanner like API
 
-Exammple:
+Example:
 
-	parser = pot.NewParser([]byte("{ fruit: orange price: 10.5 }"))
+	parser := pot.NewParser([]byte("{ fruit: orange price: 10.5 }"))
 	parse(parser)
 
 	func parse(parser pot.Parser) {
 		switch parser := parser.(type) {
-		case pot.DictKey:
+		case *pot.DictKey:
 			fmt.Printf("%s ", parser)
-		case pot.String:
+		case *pot.String:
 			fmt.Printf("%s ", parser)
 		}
 		var node pot.Parser
