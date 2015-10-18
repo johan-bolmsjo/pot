@@ -233,6 +233,26 @@ func TestLocation_Add(t *testing.T) {
 	}
 }
 
+func TestLocation_Identifier(t *testing.T) {
+	err := ParseError{
+		Identifier: "",
+		Location:   Location{1, 1},
+		Message:    "test",
+	}
+	errs := [2]ParseError{err, err}
+	errs[1].Identifier = "test"
+
+	var errsOut [2]string
+	errsExpect := [2]string{"2:1: test", "test:2:1: test"}
+
+	for i := range errsOut {
+		errsOut[i] = errs[i].Error()
+		if errsOut[i] != errsExpect[i] {
+			t.Errorf("Unexpected error message '%s', expected '%s'", errsOut[i], errsExpect[i])
+		}
+	}
+}
+
 // Exercise some functions not possible to run through examples.
 func Test_ParserCoverage(t *testing.T) {
 	var s String
