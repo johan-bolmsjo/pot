@@ -21,8 +21,8 @@ func newParserScannerErrorSink(parser Parser, es *errorSink) *ParserScanner {
 // Scan the parser for a sub parser.
 // Returns true if a sub parser was found.
 func (scanner *ParserScanner) Scan() bool {
-	var err error
-	if scanner.es.ok() {
+	err := scanner.es.err()
+	if err == nil {
 		scanner.subparser, err = scanner.parser.Next()
 		scanner.es.send(err)
 	}
@@ -45,4 +45,11 @@ func (scanner *ParserScanner) SubParser() Parser {
 // for errors.
 func (scanner *ParserScanner) Err() error {
 	return scanner.es.err()
+}
+
+// Inject an error into the scanner.
+// This will cause the scanner to abort parser iteration and the injected error
+// will be returned by the Err method.
+func (scanner *ParserScanner) InjectError(err error) {
+	scanner.es.send(err)
 }

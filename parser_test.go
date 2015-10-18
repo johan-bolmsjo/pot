@@ -203,6 +203,22 @@ func Test_ParserBytesAndLocationFunctions(t *testing.T) {
 	testParserBytesAndLocationFunctions(t, NewParserScanner(parser))
 }
 
+// Test that injecting an error aborts parser iteration.
+func TestParserScanner_InjectError(t *testing.T) {
+	scanner := NewParserScanner(NewListParser([]byte("[ this is a list ]")))
+	if !scanner.Scan() {
+		t.Errorf("First call to Scan() returned false")
+	}
+	err := &ParseError{}
+	scanner.InjectError(err)
+	if scanner.Scan() {
+		t.Errorf("Second call to Scan() returned true")
+	}
+	if errBack := scanner.Err().(*ParseError); err != errBack {
+		t.Errorf("Injected error '%p' is not the same as the returned error '%p'", err, errBack)
+	}
+}
+
 func TestLocation_Add(t *testing.T) {
 	a := Location{1, 2}
 	b := Location{3, 4}
