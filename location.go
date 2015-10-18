@@ -26,6 +26,14 @@ func (location *Location) updateFromBytes(bytes []byte) {
 	}
 }
 
+// Add two locations together.
+// An application can use this to adjust location information provided by the parser.
+func (location *Location) Add(other *Location) *Location {
+	location.Line += other.Line
+	location.Column += other.Column
+	return location
+}
+
 // Implements fmt.Stringer
 func (location Location) String() string {
 	// The line number is adjusted to count from one for presentation.

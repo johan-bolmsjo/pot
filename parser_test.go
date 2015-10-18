@@ -203,6 +203,20 @@ func Test_ParserBytesAndLocationFunctions(t *testing.T) {
 	testParserBytesAndLocationFunctions(t, NewParserScanner(parser))
 }
 
+func TestLocation_Add(t *testing.T) {
+	a := Location{1, 2}
+	b := Location{3, 4}
+	c := Location{5, 6}
+	d := a.Add(&b).Add(&c)
+	if d != &a {
+		t.Errorf("Add() returned '%p', expected the receiver '%p'", d, &a)
+	}
+	e := Location{9, 12}
+	if *d != e {
+		t.Errorf("Add() resulted in '%v', expected '%v'", d, e)
+	}
+}
+
 // Exercise some functions not possible to run through examples.
 func Test_ParserCoverage(t *testing.T) {
 	var s String
