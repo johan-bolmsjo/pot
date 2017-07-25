@@ -1,9 +1,10 @@
 package pot
 
-//-----------------------------------------------------------------------------
-
 // Parser interface implemented by Dict, DictKey, List and String parsers.
 type Parser interface {
+	// Parser name.
+	Name() string
+
 	// Get the next parser, nil or an error.
 	Next() (Parser, error)
 
@@ -14,8 +15,6 @@ type Parser interface {
 	// The location is reset when using NewParser, NewDictParser or NewListParser.
 	Location() Location
 }
-
-//-----------------------------------------------------------------------------
 
 // Root level parser capable of parsing multiple root level objects from the
 // same text input.
@@ -28,6 +27,10 @@ type Root struct {
 func NewParser(pot []byte) Parser {
 	buf := newParserBuf(pot)
 	return &Root{*buf, buf}
+}
+
+func (root *Root) Name() string {
+	return "root"
 }
 
 // Get the next parser or nil on end of input or an error.
@@ -45,8 +48,6 @@ func (root *Root) Bytes() []byte {
 func (root *Root) Location() Location {
 	return root.org.location
 }
-
-//-----------------------------------------------------------------------------
 
 // Dictionary parser.
 type Dict struct {
@@ -67,6 +68,10 @@ func newDictParser(buf *parserBuf) *Dict {
 	// Trim space to make IsEmpty() work out of the gate.
 	buf.trimSpaceLeft()
 	return dict
+}
+
+func (dict *Dict) Name() string {
+	return "dictionary"
 }
 
 // Get the next parser or nil on end of input or an error.
@@ -102,12 +107,14 @@ func (dict *Dict) Location() Location {
 	return dict.org.location
 }
 
-//-----------------------------------------------------------------------------
-
 // Dictionary key type.
 // A unique "string" type is used to be able to separate keys from string values
 // in type switches.
 type DictKey String
+
+func (key *DictKey) Name() string {
+	return "dictionary-key"
+}
 
 // Returns nil as keys does not contain sub parsers.
 func (key *DictKey) Next() (Parser, error) {
@@ -129,8 +136,6 @@ func (key *DictKey) Location() Location {
 	return (*String)(key).Location()
 }
 
-//-----------------------------------------------------------------------------
-
 // List parser.
 type List struct {
 	org parserBuf  // Text the parser was initialized with.
@@ -149,6 +154,10 @@ func newListParser(buf *parserBuf) *List {
 	return list
 }
 
+func (list *List) Name() string {
+	return "list"
+}
+
 // Get the next parser or nil on end of input or an error.
 // The returned parser may be a Dict, List or String.
 func (list *List) Next() (Parser, error) {
@@ -165,10 +174,12 @@ func (list *List) Location() Location {
 	return list.org.location
 }
 
-//-----------------------------------------------------------------------------
-
 // String parser.
 type String parserBuf
+
+func (str *String) Name() string {
+	return "string"
+}
 
 // Returns nil as strings does not contain sub parsers.
 func (str *String) Next() (Parser, error) {
@@ -221,8 +232,6 @@ func (str *String) Bytes() []byte {
 func (str *String) Location() Location {
 	return str.location
 }
-
-//-----------------------------------------------------------------------------
 
 // Scans a DictKey from a text buffer.
 // Returns a parser or nil when there is no more input or an error.
@@ -422,5 +431,3 @@ func validKeyChar(i int, c byte) bool {
 	}
 	return false
 }
-
-//-----------------------------------------------------------------------------
